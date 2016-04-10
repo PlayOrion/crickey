@@ -167,7 +167,15 @@ uint8_t calculate_crc8(	uint8_t* byte_data,
 	for(byte_data_index = 0; byte_data_index < data_len; byte_data_index++) // for each byte of data:
 	{
 		// xor in the next input byte, at the MSB.
-		calculated_crc ^= ( byte_data[byte_data_index] << (CRC_WIDTH_8 - 8) );
+		if(crc_config_reflect_input == 1)
+		{
+			//			printf("data: 0x%02X, reflected: 0x%02X\n",byte_data[byte_data_index], reflect(byte_data[byte_data_index],8));
+			calculated_crc ^= reflect(byte_data[byte_data_index],8) << (CRC_WIDTH_8-8);
+		}
+		else
+		{
+			calculated_crc ^= byte_data[byte_data_index] << (CRC_WIDTH_8-8);
+		}
 
 #ifdef USE_TABLE_FOR_CRC_8
 
@@ -198,7 +206,7 @@ uint8_t calculate_crc8(	uint8_t* byte_data,
 	// xor with final_xor_value:
 	if(crc_config_reflect_output == 1)
 	{
-		calculated_crc = ~calculated_crc ^ crc_config_final_xor_value;
+		calculated_crc = (reflect(calculated_crc,CRC_WIDTH_8) & CRC_MASK(CRC_WIDTH_8)) ^ crc_config_final_xor_value;
 	}
 	else
 	{
@@ -213,6 +221,8 @@ uint8_t calculate_crc8(	uint8_t* byte_data,
 
 int check_crc_8_algo()
 {
+	uint8_t data_array [10] = {'1','2','3','4','5','6','7','8','9', 0x00};
+
 
 	// simple 1
 	// CRC-8 : width=8 poly=0x07 init=0x00 refin=false refout=false xorout=0x00 check=0xf4 name="CRC-8"
@@ -228,7 +238,8 @@ int check_crc_8_algo()
 	{
 //		printf ("CRC-8 check passed.\n\n");
 	}
-
+	data_array [9] = 0xF4;
+//	printf("crc including crc: %02X\n",calculate_crc8(data_array,10,0x00,0x00,0x07,0,0));
 
 
 	// simple 2
@@ -245,7 +256,8 @@ int check_crc_8_algo()
 	{
 //		printf ("CRC-8/CDMA2000 check passed.\n\n");
 	}
-
+	data_array [9] = 0xDA;
+//	printf("crc including crc: %02X\n",calculate_crc8(data_array,10,0xFF,0x00,0x9B,0,0));
 
 	// additional: xor-out value
 	// CRC-8/ITU : width=8 poly=0x07 init=0x00 refin=false refout=false xorout=0x55 check=0xa1 name="CRC-8/ITU"
@@ -261,10 +273,25 @@ int check_crc_8_algo()
 	{
 //		printf ("CRC-8/ITU check passed.\n\n");
 	}
-
+	data_array [9] = (0xA1 ^ 0x55); // inverse of xor is xor. as this algo does a final xor with 0x55 to get 0xA1, we need to xor A1 and 55 to get actual crc.
+//	printf("crc including crc: %02X\n",calculate_crc8(data_array,10,0x00,0x00,0x07,0,0));
 
 	// additional: refin is true. reflect input data.
-	//	calculate_crc8((uint8_t*)"123456789",9,0x00,0x00,0x07,0,0,0); // CRC-8/DARC : width=8 poly=0x39 init=0x00 refin=true refout=true xorout=0x00 check=0x15 name="CRC-8/DARC"
+	// CRC-8/DARC : width=8 poly=0x39 init=0x00 refin=true refout=true xorout=0x00 check=0x15 name="CRC-8/DARC"
+#ifdef USE_TABLE_FOR_CRC_8
+	generate_crc8_table(0x39); // required if testing table based implementation.
+#endif // USE_TABLE_FOR_CRC_8
+	if( 0x15 != calculate_crc8((uint8_t*)"123456789",9,0x00,0x00,0x39,1,1) )
+	{
+		printf ("CRC-8/DARC reference check failed!\n\n");
+		return -1;
+	}
+	else
+	{
+		//		printf ("CRC-8/DARC check passed.\n\n");
+	}
+	data_array [9] = 0x15;
+//	printf("crc including crc: %02X\n",calculate_crc8(data_array,10,0x00,0x00,0x39,1,1));
 
 	return 1; // ok.
 }
